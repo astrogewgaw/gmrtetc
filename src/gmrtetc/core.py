@@ -308,6 +308,21 @@ class Observation:
             #     return (1.0/gby_tsys_f)
             # else:
             #     return 0.0
+         if band_number == 5: 
+            ref_gby_tsys = 0.0036
+            gain = 0.22                                     
+            a = -57.79067497317600000
+            b =  0.283183485351112000
+            c = -0.000576846763506177
+            d =  6.25315209850824e-07
+            e = -3.8047941517696e-10
+            p =  1.23211866985187e-13
+            q =  -1.65909077237512e-17
+            x = freqx
+            gby_tsys= a*1 + b*x + c*x*x + d*x*x*x + e*x*x*x*x + p*x*x*x*x*x + q*x*x*x*x*x*x
+            gby_tsys_f = gain/(gain/gby_tsys - t_def + Tsky)
+            ref_gby_tsys = gain/(gain/ref_gby_tsys - t_def + Tsky)
+             
         
          return gby_tsys_f
                         
