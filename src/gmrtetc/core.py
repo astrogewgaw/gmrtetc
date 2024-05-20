@@ -6,7 +6,7 @@ import sys
 import re
 import math
 
-#Input looks like bandno= Observation(int(input('What is the band_number?')), float(input('channel resolution:')), int(input("number of antennas:")), int(input("number of polarization used:")),  input("what is the RA?"), input("\n what is the dec?"), float(input("Put lower limit value f1")), float(input("Put upper limit value f2")), float(input("Dispersion measure:")),float(input("Pulse Width:")), str(input("Beammode:")))
+
 
 bandinfo = {
     2: {
@@ -111,8 +111,8 @@ class Observation:
     npol: int
     ra: float
     dec: float
-    f1: float
-    f2: float
+    f1: int
+    f2: int
     dm: float
     pw: float  
     beammode: str
@@ -268,10 +268,10 @@ class Observation:
             gby_tsys =  a*1 + b*x + c*x*x + d*x*x*x + e*x*x*x*x
             gby_tsys_f = gain/(gain/gby_tsys - t_def + Tsky)
             ref_gby_tsys = gain/(gain/ref_gby_tsys - t_def + Tsky)
-            # if gby_tsys_f > ref_gby_tsys:
-            #     return (1.0/gby_tsys_f)
-            # else:
-            #     return 0.0
+            if gby_tsys_f > ref_gby_tsys*0.5:
+                return (1.0/gby_tsys_f)
+            else:
+                return 0.0
          if self.band == 3:
             ref_gby_tsys =0.0039
             gain = 0.33
@@ -286,10 +286,10 @@ class Observation:
             gby_tsys = a*1 + b*x + c*x*x + d*x*x*x + e*x*x*x*x + p*x*x*x*x*x + q*x*x*x*x*x*x
             gby_tsys_f = gain/(gain/gby_tsys - t_def + Tsky)
             ref_gby_tsys = gain/(gain/ref_gby_tsys - t_def + Tsky)
-            # if gby_tsys_f > ref_gby_tsys:
-            #     return (1.0/gby_tsys_f)
-            # else:
-            #     return 0.0
+            if gby_tsys_f > ref_gby_tsys*0.5:
+                return (1.0/gby_tsys_f)
+            else:
+                return 0.0
          if band_number == 4:
             ref_gby_tsys = 0.00379
             gain = 0.33
@@ -304,25 +304,10 @@ class Observation:
             gby_tsys= a*1 + b*x + c*x*x + d*x*x*x + e*x*x*x*x + p*x*x*x*x*x + q*x*x*x*x*x*x
             gby_tsys_f = gain/(gain/gby_tsys - t_def + Tsky)
             ref_gby_tsys = gain/(gain/ref_gby_tsys - t_def + Tsky)
-            # if gby_tsys_f > ref_gby_tsys:
-            #     return (1.0/gby_tsys_f)
-            # else:
-            #     return 0.0
-         if band_number == 5: 
-            ref_gby_tsys = 0.0036
-            gain = 0.22                                     
-            a = -57.79067497317600000
-            b =  0.283183485351112000
-            c = -0.000576846763506177
-            d =  6.25315209850824e-07
-            e = -3.8047941517696e-10
-            p =  1.23211866985187e-13
-            q =  -1.65909077237512e-17
-            x = freqx
-            gby_tsys= a*1 + b*x + c*x*x + d*x*x*x + e*x*x*x*x + p*x*x*x*x*x + q*x*x*x*x*x*x
-            gby_tsys_f = gain/(gain/gby_tsys - t_def + Tsky)
-            ref_gby_tsys = gain/(gain/ref_gby_tsys - t_def + Tsky)
-             
+            if gby_tsys_f > ref_gby_tsys*0.5:
+                return (1.0/gby_tsys_f)
+            else:
+                return 0.0
         
          return gby_tsys_f
                         
@@ -334,14 +319,13 @@ class Observation:
     def sumsefd(self):
         
         sumsefd = 0.0
-        num_steps = 1000
+        # num_steps = 1000
         f1 = self.f1
         f2 = self.f2
-        step_size = (f2-f1)/num_steps
-        for i in (f1,f2): 
-            freq = f1 + i*step_size
-            gby_tsys_f = Observation.gbytsys(self,freq)
-            sumsefd = sumsefd + gby_tsys_f*gby_tsys_f*step_size
+        # step_size = (f2-f1)/num_steps
+        for i in range(f1,f2):
+            gby_tsys_f = self.gbytsys(i)
+            sumsefd = sumsefd + gby_tsys_f*gby_tsys_f
         return sumsefd
 
         
@@ -368,9 +352,13 @@ class Observation:
             rms = math.sqrt( sumsefd  /( ubw * ubw * nant * nant * npol * math.pow(10,6) * w_eff))
         if beammode == "IA":
             rms = math.sqrt( sumsefd  /( ubw * ubw * nant * npol * math.pow(10,6) * w_eff ))
-        return rms 
+        return rms*1000
+     #in mJy
+    
 
 
+
+        
 
         
 
