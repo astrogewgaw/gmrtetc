@@ -45,7 +45,7 @@ bandinfo = {
     },
     4: {
         "bw": 400,
-        "ubw": 200,
+        "ubw": 200, 
         "fmid": 650,
         "flow": 550,
         "fhigh": 850,
@@ -103,19 +103,20 @@ def getTsky408(l,b,lrange,brange,skymap):
 
 @dataclass
 class Observation:
-    #kind: str
-    #mode: str
-    band: int 
-    cr:float
-    nant: int
-    npol: int
-    ra: float
-    dec: float
-    f1: int
-    f2: int
-    dm: float
-    pw: float  
-    beammode: str
+    band: int  #Observation Band
+    cr:float   #channel resolution
+    nant: int  #number of antennas 
+    npol: int  #number of polarizations
+    ra: float  #RA of the transient 
+    dec: float  #DEC of the transient 
+    f1: float    #lower limit of frequency of transient 
+    f2: float   #upper limit of frequney of transient 
+    dm: float  #Dispersion measure in pc cm^-3
+    pw: float  #pulse width in ms 
+    w_scatt: str  #scattering width in ms 
+    cd: str  # coherent dispersion- takes 'yes' or 'no'
+    beammode: str # PA or IA 
+    ubw_1: str
     # frequency you want your value of g_t_sys
 
     @property
@@ -242,16 +243,9 @@ class Observation:
         
     
     def gbytsys(self,freqx):
-         #freqx = self.freq
-         # ubw = self.bwusable 
          fmid = Observation.fmid(self)
          Tsky = Observation.tsky(self)
          band_number = self.band
-        #  f1 = (fmid - ubw/2)+0.5
-        #  f2 = fmid + ubw/2
-        #  freqx = i
-        #  for i in (f1,f2): 
-        #      i = i + 1
          t_def = 22*( 408 / freqx) ** (2.55)
          t_def = int(t_def) #convert to integer
          Tsky = Tsky * (fmid/freqx)**(2.55)
@@ -312,21 +306,33 @@ class Observation:
          return gby_tsys_f
                         
 
-
-    # def sefd(self):
-    #     pass
-
     def sumsefd(self):
-        
+
         sumsefd = 0.0
-        # num_steps = 1000
         f1 = self.f1
         f2 = self.f2
-        # step_size = (f2-f1)/num_steps
-        for i in range(f1,f2):
+        ubw = self.bwusable
+        fmid = Observation.fmid(self)
+
+
+        #If you don't know the frquency range of your transient, then put the lower and upper limit both as 0
+    
+
+        if f1 == 0: 
+            f1 = (fmid - ubw/2) +0.5
+        else: 
+            f1 = self.f1
+        
+        if f2 == 0: 
+            f2 = (fmid + ubw/2)
+        else: 
+            f2 = self.f2
+
+        
+        for i in np.arange(f1,f2):
             gby_tsys_f = self.gbytsys(i)
             sumsefd = sumsefd + gby_tsys_f*gby_tsys_f
-        return sumsefd
+        return sumsefd  #returns the sumsefd for a range 
 
         
 
@@ -337,29 +343,56 @@ class Observation:
         pw = self.pw
         nant = self.nant
         npol = self.npol
+        
         beammode = self.beammode
+        w_scatt = self.w_scatt
+        w_dm = self.cd
 
+        if  self.ubw_1 == 'nil': 
+            ubw_1 = float(self.bwusable)
+        else: 
+            ubw_1 = self.ubw_1
 
-        w_scatt=math.pow(10,(-6.46 + 0.154 * math.log10(dm) + 1.07 * math.pow(math.log10(dm),2) - 3.86 * math.log10(fmid/1000)))
+       
+        
+        #w_scatt - insert zero if you don't have any value and put value in ms if you have value 
+        if w_scatt == 'nil': 
+            w_scatt=math.pow(10,(-6.46 + 0.154 * math.log10(dm) + 1.07 * math.pow(math.log10(dm),2) - 3.86 * math.log10(fmid/1000)))
+        else: 
+            w_scatt = float(self.w_scatt)
         w_scatt_f = w_scatt/1000
-        w_dm = 8.3 * math.pow(10,6) * dm * cr/math.pow(fmid,3)
+    
+        #w_dm
+        if w_dm == 'yes':
+            w_dm = 0
+        elif w_dm == 'no': 
+            w_dm =  8.3 * math.pow(10,6) * dm * cr/math.pow(fmid,3)
         w_dm_f = w_dm/1000
+
+        pw = pw/1000
         w_eff = math.sqrt( pw*pw + w_dm_f*w_dm_f + w_scatt_f*w_scatt_f )
         sumsefd = Observation.sumsefd(self)
-        ubw = self.bwusable
+        
 
         if beammode == "PA": 
-            rms = math.sqrt( sumsefd  /( ubw * ubw * nant * nant * npol * math.pow(10,6) * w_eff))
+            rms = math.sqrt( sumsefd  /( ubw_1 * nant * nant * npol * math.pow(10,6) * w_eff)) 
         if beammode == "IA":
-            rms = math.sqrt( sumsefd  /( ubw * ubw * nant * npol * math.pow(10,6) * w_eff ))
-        return rms*1000
-     #in mJy
-    
+            rms = math.sqrt( sumsefd  /( ubw_1 * nant * npol * math.pow(10,6) * w_eff ))
+        if beammode == "PA-IA":
+            rms = math.sqrt( sumsefd  /( ubw_1 * (nant-1) * nant * npol * math.pow(10,6) * w_eff ))
+        rms = rms*1000
+        
+        print(f"The rms for the transient is {rms}mJy")
+        
+     #in mJy (milli-Jansky)
 
 
+
+# bandno= Observation(int(input('What is the band_number?')), float(input('channel resolution:')), int(input("number of antennas:")), int(input("number of polarization used:")),  input("what is the RA?"), input("\n what is the dec?"), int(input("Put lower limit value f1 (put 0 if you want the dictionary value of f1)")), int(input("Put upper limit value f2 (put 0 if you want the dictionary value of f2)")), float(input("Dispersion measure:")),float(input("Pulse Width in ms:")), str(input("w_sctt in ms")), str(input("Coherent Dispersion (yes/no)")), str(input("Beammode (IA/PA/PA-IA):")), str(input('usable bw(put nil if you want dictionary value)')))
+# h= bandno.rms()
+# print(h)
 
         
 
         
 
-        
