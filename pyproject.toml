@@ -1,6 +1,42 @@
 [build-system]
 requires = ["wheel", "setuptools>=45", "setuptools_scm[toml]>=6.0"]
 
+[project]
+name = "gmrtetc"
+license = "MIT"
+readme = "README.md"
+dynamic = ["version"]
+requires-python = ">=3.10"
+license-files = ["LICENSE"]
+description = "The GMRT Exposure Time Calculator, in Python."
+authors = [{name = "Ujjwal Panda", email = "ujjwalpanda97@gmail.com"}]
+
+classifiers = [
+  "Operating System :: Unix",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "astropy",
+]
+
+[project.urls]
+Source = "https://github.com/astrogewgaw/gmrtetc"
+Homepage = "https://github.com/astrogewgaw/gmrtetc"
+Documentation = "https://github.com/astrogewgaw/gmrtetc"
+Issues = "https://github.com/astrogewgaw/gmrtetc/issues"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+packages = {find = {where = ["src"]}}
+
 [tool.setuptools_scm]
 write_to = "src/gmrtetc/_version.py"
 
@@ -21,7 +57,7 @@ ignore-init-module = false
 ignore-semiprivate = false
 ignore-nested-classes = true
 badge-style = "for-the-badge"
-ignore-nested-functions = false
+ignore-nested-functions = true
 ignore-property-decorators = false
 generate-badge = "assets/interrogate.svg"
 exclude = [
