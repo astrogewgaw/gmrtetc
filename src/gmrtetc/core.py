@@ -1,8 +1,8 @@
 import numpy as np
-from typing import Self
 from pathlib import Path
 from dataclasses import dataclass
 from numpy.polynomial import Polynomial
+from astropy.coordinates import SkyCoord
 from scipy.interpolate import RegularGridInterpolator as RGI
 
 BANDINFO = {
@@ -91,80 +91,43 @@ DATADIR = (Path(__file__).parent / "data").resolve()
 
 @dataclass
 class Observation:
+    ra: str
+    dec: str
     band: int
     nant: int
     npol: int
-    ra: float
-    dec: float
-    flow: float
-    fmid: float
-    fhigh: float
-    bwusable: float
-
-    @classmethod
-    def new(
-        cls,
-        band: int,
-        nant: int,
-        npol: int,
-        ra: float,
-        dec: float,
-    ) -> Self:
-        if band not in [2, 3, 4, 5]:
-            msg = f"Band {band} is invalid. Only Bands 2, 3, 4, and 5 available at the GMRT."
-            ValueError(msg)
-
-        if nant > 30:
-            msg = f"nant = {nant} > 30. There are only 30 antennas at the GMRT."
-            raise ValueError(msg)
-
-        if npol not in [1, 2]:
-            msg = "Invalid number of polarisations. Can be only 1 or 2."
-            raise ValueError(msg)
-
-        return cls(
-            band,
-            nant,
-            npol,
-            ra,
-            dec,
-            BANDINFO[band]["flow"],
-            BANDINFO[band]["fmid"],
-            BANDINFO[band]["fhigh"],
-            BANDINFO[band]["bwusable"],
-        )
 
     @property
-    def galactic(self):
-        alpha = np.deg2rad(self.ra)
-        delta = np.deg2rad(self.dec)
+    def flow(self):
+        return BANDINFO[self.band]["flow"]
 
-        gl0 = np.deg2rad(122.9320)
-        delta0 = np.deg2rad(27.1284)
-        alpha0 = np.deg2rad(192.8595)
+    @property
+    def fmid(self):
+        return BANDINFO[self.band]["fmid"]
 
-        gl = np.rad2deg(
-            gl0
-            - (
-                (np.cos(delta) * np.sin(alpha - alpha0))
-                / (
-                    (np.sin(delta) * np.cos(delta0))
-                    - (np.cos(delta) * np.sin(delta0) * np.cos(alpha - alpha0))
-                )
-            )
-        )
+    @property
+    def fhigh(self):
+        return BANDINFO[self.band]["fhigh"]
 
-        gb = np.rad2deg(
-            np.arcsin(
-                np.sin(delta) * np.sin(delta0)
-                + np.cos(delta) * np.cos(delta0) * np.cos(alpha - alpha0)
-            )
-        )
+    @property
+    def bwusable(self):
+        return BANDINFO[self.band]["bwusable"]
 
-        return gl, gb
+    @property
+    def coords(self) -> SkyCoord:
+        return SkyCoord(" ".join([self.ra, self.dec]))
+
+    @property
+    def galactic(self) -> SkyCoord:
+        galactic = self.coords.galactic
+        if galactic is not None:
+            return galactic
+        else:
+            raise ValueError("Cannot derive galactic coordinates! Exiting...")
 
     def calctsky(self, freq: float) -> float:
-        gl, gb = self.galactic
+        gl = self.galactic.l
+        gb = self.galactic.b
 
         with open(f"{DATADIR}/t408.dat") as f:
             text = f.read()
@@ -189,7 +152,7 @@ class Observation:
         tsky = -1 if tsky408 == 1e7 else (408.0 / freq) ** 2.55 * tsky408
         return tsky
 
-    def calcgbytsys(self, freq: float) -> float:
+    def calcsefd(self, freq: float) -> float:
         tdef = int(22 * (408 / freq) ** 2.55)
         tsky = self.calctsky(self.fmid) * (self.fmid / freq) ** 2.55
 
@@ -217,9 +180,17 @@ class BeamformedObservation(Observation):
     mode: str
     dm: float
     wint: float
+    wscatt: float = -1.0
     cdmode: bool = False
-    wdm: float | None = None
-    wscatt: float | None = None
+
+    def __post_init__(self):
+        if self.wscatt < 0.0:
+            self.wscatt = 10 ** (
+                -6.46
+                + 0.154 * np.log10(self.dm)
+                + 1.07 * np.log10(self.dm) ** 2
+                - 3.86 * np.log10(self.fmid / 1000)
+            )
 
     @property
     def df(self) -> float:
@@ -227,45 +198,37 @@ class BeamformedObservation(Observation):
 
     @property
     def freqs(self) -> np.ndarray:
-        return np.linspace(self.flow, self.fhigh, self.nf)
+        return np.linspace(
+            self.fmid - (self.bwusable / 2) + 0.5 * self.df,
+            self.fmid + (self.bwusable / 2),
+            self.nf,
+        )
+
+    @property
+    def wdm(self) -> float:
+        return 0.0 if self.cdmode else 8.3e6 * self.dm * self.df / (self.fmid**3)
+
+    @property
+    def weff(self) -> float:
+        return np.sqrt(self.wint**2 + self.wdm**2 + self.wscatt**2)
 
     def calcsumsefd(self) -> float:
         sumsefd = 0.0
         for freq in self.freqs:
-            sumsefd += self.calcgbytsys(freq)
+            sefd = self.calcsefd(freq)
+            sumsefd = sumsefd + (sefd * sefd)
         return sumsefd
 
     def calcrms(self) -> float:
-        rms = self.calcsumsefd() / (
-            self.npol
-            * (self.bwusable * 1e6)
-            * np.sqrt(
-                self.wint**2
-                + (0.0 if self.cdmode else 8.3e6 * self.dm * self.df / (self.fmid**3))
-                ** 2
-                + (
-                    10
-                    ** (
-                        -6.46
-                        + 0.154 * np.log10(self.dm)
-                        + 1.07 * np.log10(self.dm) ** 2
-                        - 3.86 * np.log10(self.fmid / 1000)
-                    )
-                    if self.wscatt is None
-                    else self.wscatt
-                )
-                ** 2
-            )
-        )
-
+        rms = self.calcsumsefd() / self.nf
+        rms = rms / (self.npol * (self.bwusable * 1e6) * (self.weff * 1e-3))
         if self.mode == "IA":
-            rms /= self.nant
+            rms = rms / self.nant
         elif self.mode == "PA":
-            rms /= self.nant**2
+            rms = rms / self.nant**2
         elif self.mode == "PC":
-            rms /= self.nant * (self.nant - 1)
+            rms = rms / (self.nant * (self.nant - 1))
         else:
             raise ValueError("This mode is not available at the GMRT.")
         rms = np.sqrt(rms)
-
         return rms
