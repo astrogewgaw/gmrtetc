@@ -9,7 +9,7 @@ __pycache__
 .mypy_cache
 .pytest_cache
 .ipynb_checkpoints
-src/candies/_version.py
+src/gmrtetc/_version.py
 
 *.o
 *.so
