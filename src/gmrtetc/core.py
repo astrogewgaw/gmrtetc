@@ -96,21 +96,31 @@ class Observation:
     band: int
     nant: int
     npol: int
+    _flow: float
+    _fhigh: float
 
     @property
-    def flow(self):
-        return BANDINFO[self.band]["flow"]
+    def flow(self) -> float:
+        return self._flow
+
+    @flow.setter
+    def flow(self, value: float | None = None) -> None:
+        self._flow = BANDINFO[self.band]["flow"] if value is None else value
 
     @property
-    def fmid(self):
+    def fhigh(self) -> float:
+        return self._fhigh
+
+    @fhigh.setter
+    def fhigh(self, value: float | None = None) -> None:
+        self._fhigh - BANDINFO[self.band]["fhigh"] if value is None else value
+
+    @property
+    def fmid(self) -> float:
         return BANDINFO[self.band]["fmid"]
 
     @property
-    def fhigh(self):
-        return BANDINFO[self.band]["fhigh"]
-
-    @property
-    def bwusable(self):
+    def bwusable(self) -> float:
         return BANDINFO[self.band]["bwusable"]
 
     @property
