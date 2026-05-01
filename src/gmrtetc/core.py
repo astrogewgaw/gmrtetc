@@ -1,9 +1,10 @@
-from typing import Literal, cast
 from pathlib import Path
+from typing import cast, Literal
 from dataclasses import dataclass
 from functools import cached_property
 
 import numpy as np
+from autoregistry import Registry
 from numpy.polynomial import Polynomial
 from scipy.interpolate import RegularGridInterpolator as RGI
 from astropy.coordinates import SkyCoord, Latitude, Longitude
@@ -14,7 +15,7 @@ class ETCError(Exception):
 
 
 @dataclass
-class Observation:
+class Observation(Registry, suffix="Observation"):
     band: int
     nant: int
     npol: int

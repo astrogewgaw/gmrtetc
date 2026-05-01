@@ -24,6 +24,7 @@ dependencies = [
   "numpy",
   "scipy",
   "astropy",
+  "autoregistry",
 ]
 
 [project.urls]
