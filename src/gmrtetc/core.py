@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 import numpy as np
+from beartype import beartype
 from autoregistry import Registry
 from numpy.polynomial import Polynomial
 from scipy.interpolate import RegularGridInterpolator as RGI
@@ -14,6 +15,7 @@ class ETCError(Exception):
     pass
 
 
+@beartype
 @dataclass
 class Observation(Registry, suffix="Observation"):
     band: int
@@ -27,12 +29,13 @@ class Observation(Registry, suffix="Observation"):
         try:
             return {
                 2: {
-                    "bw": 200,
-                    "fc": 200,
-                    "fl": 125,
-                    "fh": 250,
-                    "bwuse": 50,
+                    "bw": 200.0,
+                    "fc": 200.0,
+                    "fl": 125.0,
+                    "fh": 250.0,
+                    "bwuse": 50.0,
                     "refgain": 0.33,
+                    "confusion": 86.2,
                     "refgbytsys": 0.0013,
                     "sensitivity": Polynomial(
                         [
@@ -45,12 +48,13 @@ class Observation(Registry, suffix="Observation"):
                     ),
                 },
                 3: {
-                    "bw": 200,
-                    "fc": 400,
-                    "fl": 260,
-                    "fh": 500,
-                    "bwuse": 120,
+                    "bw": 200.0,
+                    "fc": 400.0,
+                    "fl": 260.0,
+                    "fh": 500.0,
+                    "bwuse": 120.0,
                     "refgain": 0.33,
+                    "confusion": 3.8,
                     "refgbytsys": 0.0039,
                     "sensitivity": Polynomial(
                         [
@@ -65,12 +69,13 @@ class Observation(Registry, suffix="Observation"):
                     ),
                 },
                 4: {
-                    "bw": 400,
-                    "fc": 650,
-                    "fl": 550,
-                    "fh": 850,
-                    "bwuse": 200,
+                    "bw": 400.0,
+                    "fc": 650.0,
+                    "fl": 550.0,
+                    "fh": 850.0,
+                    "bwuse": 200.0,
                     "refgain": 0.33,
+                    "confusion": 0.4,
                     "refgbytsys": 0.00379,
                     "sensitivity": Polynomial(
                         [
@@ -85,12 +90,13 @@ class Observation(Registry, suffix="Observation"):
                     ),
                 },
                 5: {
-                    "bw": 400,
-                    "fl": 980,
-                    "fc": 1260,
-                    "fh": 1500,
-                    "bwuse": 280,
+                    "bw": 400.0,
+                    "fl": 980.0,
+                    "fc": 1260.0,
+                    "fh": 1500.0,
+                    "bwuse": 280.0,
                     "refgain": 0.22,
+                    "confusion": 0.04,
                     "refgbytsys": 0.0036,
                     "sensitivity": Polynomial(
                         [
@@ -119,6 +125,10 @@ class Observation(Registry, suffix="Observation"):
     @property
     def fc(self) -> float:
         return self.info["fc"]
+
+    @property
+    def bw(self) -> float:
+        return self.info["bw"]
 
     @property
     def bwuse(self) -> float:
@@ -177,8 +187,8 @@ class Observation(Registry, suffix="Observation"):
             ]
         ).reshape(92, 181)
 
-    def tsky(self, f: float):
-        return (
+    def tsky(self, f: float) -> float:
+        return float(
             -1
             if (
                 tsky408 := 10
@@ -196,7 +206,23 @@ class Observation(Registry, suffix="Observation"):
             else (408.0 / f) ** 2.55 * tsky408
         )
 
+    @property
+    def uptime(self) -> float:
+        dec = self.dec.rad
+        lat = 19.1 / 180.0 * np.pi
+        elv = 17.0 / 180.0 * np.pi
+        return float(
+            np.acos(
+                (np.sin(elv) - (np.sin(lat) * np.sin(dec)))
+                / (np.cos(lat) * np.cos(dec))
+            )
+            / (2 * np.pi)
+            * 24.0
+            * 2.0
+        )
 
+
+@beartype
 @dataclass
 class PulsarObservation(Observation):
     nf: int
@@ -208,24 +234,36 @@ class PulsarObservation(Observation):
 
     def __post_init__(self):
         if self.wscat < 0.0:
-            self.wscat = 10 ** (
-                -6.46
-                + 0.154 * np.log10(self.dm)
-                + 1.07 * np.log10(self.dm) ** 2
-                - 3.86 * np.log10(self.fc / 1000)
+            self.wscat = (
+                10
+                ** (
+                    -6.46
+                    + 0.154 * np.log10(self.dm)
+                    + 1.07 * np.log10(self.dm) ** 2
+                    - 3.86 * np.log10(self.fc / 1000)
+                )
+                * 1e-3
             )
 
     @property
     def df(self) -> float:
-        return self.bwuse / self.nf
+        return self.bw / self.nf
 
     @property
     def freqs(self) -> np.ndarray:
         return np.linspace(self.fl, self.fh, self.nf)
 
     @property
+    def usefreqs(self) -> np.ndarray:
+        return np.linspace(
+            self.fc - self.bwuse / 2.0 + 0.5,
+            self.fc + self.bwuse / 2.0,
+            self.nf,
+        )
+
+    @property
     def wdm(self) -> float:
-        return 0.0 if self.cdmode else 8.3e6 * self.dm * self.df / (self.fc**3)
+        return 0.0 if self.cdmode else 8.3e3 * self.dm * self.df / (self.fc**3)
 
     @property
     def weff(self) -> float:
@@ -238,20 +276,70 @@ class PulsarObservation(Observation):
         gbytsys = self.refgain / (self.refgain / self.sensitivity(f) - tdef + tsky)
         return 1.0 / gbytsys if gbytsys > refgbytsys * 0.5 else 0.0
 
+    @property
     def sumsefd(self) -> float:
-        return float(np.sum(np.vectorize(self.sefd)(self.freqs)))
+        return float(np.sum(np.vectorize(self.sefd)(self.usefreqs) ** 2))
 
+
+@beartype
+@dataclass
+class SinglePulseObservation(PulsarObservation):
     def rms(self) -> float:
         try:
-            return np.sqrt(
-                self.sumsefd()
-                / self.nf
-                / (self.npol * (self.bwuse * 1e6) * (self.weff * 1e-3))
-                / {
-                    "IA": self.nant,
-                    "PA": self.nant**2,
-                    "PC": self.nant * (self.nant - 1),
-                }[self.beammode]
+            return float(
+                np.sqrt(
+                    self.sumsefd
+                    / self.nf
+                    / (self.npol * (self.bwuse * 1e6) * self.weff)
+                    / {
+                        "IA": self.nant,
+                        "PA": self.nant**2,
+                        "PC": self.nant * (self.nant - 1),
+                    }[self.beammode]
+                )
             )
         except KeyError:
             raise ETCError("INVALID BEAM MODE. ABORT.")
+
+
+@beartype
+@dataclass
+class FoldedProfileObservation(PulsarObservation):
+    tobs: float = 0.0
+    period: float = 0.0
+
+    @property
+    def duty(self) -> float:
+        return self.weff / self.period
+
+    def rms(self) -> float:
+        if (self.tobs > 0.0) and (self.period > 0.0):
+            try:
+                return float(
+                    np.sqrt(
+                        self.sumsefd
+                        / self.nf
+                        / (self.npol * (self.bwuse * 1e6) * self.tobs)
+                        / {
+                            "IA": self.nant,
+                            "PA": self.nant**2,
+                            "PC": self.nant * (self.nant - 1),
+                        }[self.beammode]
+                        * (self.duty / (1 - self.duty))
+                    )
+                )
+            except KeyError:
+                raise ETCError("INVALID BEAM MODE. ABORT.")
+        raise ETCError("PERIOD AND TOBS SHOULD BE > 0. ABORT.")
+
+
+@beartype
+@dataclass
+class ContinuumObservation(Observation):
+    pass
+
+
+@beartype
+@dataclass
+class LineObservation(Observation):
+    pass
