@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 import numpy as np
+import healpy as hp
 from beartype import beartype
 from autoregistry import Registry
 from numpy.polynomial import Polynomial
@@ -171,7 +172,7 @@ class Observation(Registry, suffix="Observation"):
         return cast(Latitude, self.galactic.b)
 
     @cached_property
-    def skymap(self) -> np.ndarray:
+    def skymaplegacy(self) -> np.ndarray:
         return np.asarray(
             [
                 float(
@@ -187,7 +188,7 @@ class Observation(Registry, suffix="Observation"):
             ]
         ).reshape(92, 181)
 
-    def tsky(self, f: float) -> float:
+    def tskylegacy(self, f: float) -> float:
         return float(
             -1
             if (
@@ -204,6 +205,22 @@ class Observation(Registry, suffix="Observation"):
             )
             == 1e7
             else (408.0 / f) ** 2.55 * tsky408
+        )
+
+    @cached_property
+    def skymap(self) -> np.ndarray:
+        return hp.read_map(Path(__file__).parent / "data" / "haslam.fits", dtype=float)
+
+    def tsky(self, f: float) -> float:
+        return (408.0 / f) ** 2.55 * float(
+            self.skymap[
+                hp.ang2pix(
+                    512,
+                    cast(Longitude, self.gl).deg,
+                    cast(Latitude, self.gb).deg,
+                    lonlat=True,
+                )
+            ]
         )
 
     @property
