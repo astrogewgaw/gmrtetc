@@ -25,7 +25,7 @@ class Observation(Registry, suffix="Observation"):
     rastr: str
     decstr: str
 
-    @property
+    @cached_property
     def info(self):
         try:
             return {
@@ -115,59 +115,59 @@ class Observation(Registry, suffix="Observation"):
         except KeyError:
             raise ETCError("INVALID BAND. ABORT.")
 
-    @property
+    @cached_property
     def fl(self) -> float:
         return self.info["fl"]
 
-    @property
+    @cached_property
     def fh(self) -> float:
         return self.info["fh"]
 
-    @property
+    @cached_property
     def fc(self) -> float:
         return self.info["fc"]
 
-    @property
+    @cached_property
     def bw(self) -> float:
         return self.info["bw"]
 
-    @property
+    @cached_property
     def bwuse(self) -> float:
         return self.info["bwuse"]
 
-    @property
+    @cached_property
     def refgain(self) -> float:
         return self.info["refgain"]
 
-    @property
+    @cached_property
     def refgbytsys(self) -> float:
         return self.info["refgbytsys"]
 
-    @property
+    @cached_property
     def sensitivity(self) -> Polynomial:
         return self.info["sensitivity"]
 
-    @property
+    @cached_property
     def coords(self) -> SkyCoord:
         return SkyCoord(f"{self.rastr} {self.decstr}")
 
-    @property
+    @cached_property
     def ra(self) -> Longitude:
         return cast(Longitude, self.coords.ra)
 
-    @property
+    @cached_property
     def dec(self) -> Latitude:
         return cast(Latitude, self.coords.dec)
 
-    @property
+    @cached_property
     def galactic(self) -> SkyCoord:
         return cast(SkyCoord, self.coords.galactic)
 
-    @property
+    @cached_property
     def gl(self) -> Longitude:
         return cast(Longitude, self.galactic.l)
 
-    @property
+    @cached_property
     def gb(self) -> Latitude:
         return cast(Latitude, self.galactic.b)
 
@@ -223,7 +223,7 @@ class Observation(Registry, suffix="Observation"):
             ]
         )
 
-    @property
+    @cached_property
     def uptime(self) -> float:
         dec = self.dec.rad
         lat = 19.1 / 180.0 * np.pi
@@ -262,15 +262,15 @@ class PulsarObservation(Observation):
                 * 1e-3
             )
 
-    @property
+    @cached_property
     def df(self) -> float:
         return self.bw / self.nf
 
-    @property
+    @cached_property
     def freqs(self) -> np.ndarray:
         return np.linspace(self.fl, self.fh, self.nf)
 
-    @property
+    @cached_property
     def usefreqs(self) -> np.ndarray:
         return np.linspace(
             self.fc - self.bwuse / 2.0 + 0.5,
@@ -278,11 +278,11 @@ class PulsarObservation(Observation):
             self.nf,
         )
 
-    @property
+    @cached_property
     def wdm(self) -> float:
         return 0.0 if self.cdmode else 8.3e3 * self.dm * self.df / (self.fc**3)
 
-    @property
+    @cached_property
     def weff(self) -> float:
         return np.sqrt(self.wint**2 + self.wdm**2 + self.wscat**2)
 
@@ -293,7 +293,7 @@ class PulsarObservation(Observation):
         gbytsys = self.refgain / (self.refgain / self.sensitivity(f) - tdef + tsky)
         return 1.0 / gbytsys if gbytsys > refgbytsys * 0.5 else 0.0
 
-    @property
+    @cached_property
     def sumsefd(self) -> float:
         return float(np.sum(np.vectorize(self.sefd)(self.usefreqs) ** 2))
 
@@ -325,7 +325,7 @@ class FoldedProfileObservation(PulsarObservation):
     tobs: float = 0.0
     period: float = 0.0
 
-    @property
+    @cached_property
     def duty(self) -> float:
         return self.weff / self.period
 
