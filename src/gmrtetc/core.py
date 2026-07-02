@@ -196,7 +196,7 @@ class Observation(Registry, suffix="Observation"):
                 ** (
                     RGI(
                         (4 * np.arange(-45, 47), np.arange(-90, 91)),
-                        self.skymap,
+                        self.skymaplegacy,
                         fill_value=7,
                         method="linear",
                         bounds_error=False,
